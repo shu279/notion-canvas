@@ -4,7 +4,7 @@ import { buildSync } from "esbuild";
 import { Script } from "node:vm";
 import { JSDOM } from "jsdom";
 import { sample, SOURCE, DB, schema, page } from "./fixtures.ts";
-import { DEFAULT_FIELDS, decodeCard } from "../src/model.ts";
+import { DEFAULT_FIELDS, decodeCard, encodeCard } from "../src/model.ts";
 const bundle = buildSync({ entryPoints: ["src/main.ts"], bundle:true,write:false,minify:true,platform:"browser",target:"es2022",format:"cjs",external:["obsidian","electron"] }).outputFiles[0].text;
 function fixture() {
  const dom=new JSDOM('<body></body>');
@@ -44,7 +44,10 @@ test("production plugin creates a native Canvas through its registered refresh c
  const el=f.dom.window.document.createElement('div');
  f.renderers.get('notion-paper')(data.nodes[1].text.split('\n')[1],el);
  el.querySelector('a')!.dispatchEvent(new f.dom.window.MouseEvent('click',{bubbles:true,cancelable:true}));
- assert.equal(f.external.length,1);assert.match(f.external[0],/^notion:\/\/www.notion.so\//);
+ assert.equal(f.external.length,1);assert.equal(f.external[0],`notion://www.notion.so/${sample.id.replace(/-/g,'')}?deepLinkOpenNewTab=true`);
+ f.plugin.settings.desktop=false;
+ el.querySelector('a')!.dispatchEvent(new f.dom.window.MouseEvent('click',{bubbles:true,cancelable:true}));
+ assert.equal(f.external[1],`https://www.notion.so/${sample.id.replace(/-/g,'')}`);
  await f.plugin.saveSettings();assert.equal(JSON.stringify(f.plugin.settingsData).includes('fixture-secret'),false);
  assert.ok(f.requests.every(r=>r.method==='GET'||r.url.endsWith('/query')));
  }finally{f.plugin.onunload();f.dom.window.close();}
@@ -56,4 +59,26 @@ test("production plugin leaves a saved layout byte-for-byte unchanged after an A
  f.setFailure();await f.plugin.refresh();assert.equal(entry.content,before);
  assert.ok(f.notices.some(n=>n.includes('Cannot access Papers')));assert.ok(f.notices.every(n=>!n.includes('fixture-secret')));
  }finally{f.plugin.onunload();f.dom.window.close();}
+});
+test("Canvas has a visible refresh button even without a visible tab header, and unload removes controls",async()=>{
+ const f=fixture();
+ try {
+  const doc=f.dom.window.document;
+  const content=doc.createElement('div'),controls=doc.createElement('div');content.append(controls);doc.body.append(content);
+  const node:any={text:encodeCard({version:1,sourceId:SOURCE,paper:sample}),x:11,y:22,width:600,height:600,nodeEl:doc.createElement('div'),
+   startEditing(){this.isEditing=true;},isEditable(){return true;},moveAndResize(data:any){Object.assign(this,data);},
+   resize(data:any){this.moveAndResize({...this,...data});},setData(data:any){Object.assign(this,data);},render(){}};
+  let saves=0;
+  const canvas={nodes:new Map([['paper',node]]),canvasControlsEl:controls,requestSave:()=>saves++};
+  const leaf={view:{file:{path:'Papers.canvas'},canvas,contentEl:content,addAction:()=>doc.createElement('button')}};
+  f.setLive([leaf]);await f.plugin.onload();
+  const button=controls.querySelector('button')!;
+  assert.equal(button.textContent,'Refresh papers');assert.equal(saves,1);
+  assert.deepEqual([node.x,node.y,node.width,node.height],[11,22,360,210]);
+  node.startEditing();assert.equal(node.isEditing,undefined);
+  let refreshed=0;f.plugin.refresh=async()=>{refreshed++;};button.click();assert.equal(refreshed,1);
+  f.plugin.settings.cardWidth=420;await f.plugin.saveSettings();assert.equal(node.width,420);
+  f.plugin.onunload();assert.equal(controls.querySelector('button'),null);
+  node.startEditing();assert.equal(node.isEditing,true);
+ } finally {f.plugin.onunload();f.dom.window.close();}
 });

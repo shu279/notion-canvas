@@ -3,11 +3,13 @@ import { renderCard } from "./card";
 import { DEFAULT_FIELDS, Fields, object, pageUrl, parsePayload, UserError } from "./model";
 import { NotionClient } from "./notion";
 import { CanvasStore, commitPapers, LiveCanvas } from "./sync";
-interface Settings { secretName: string; source: string; sourceKind: "database" | "data-source"; canvasPath: string; fields: Fields; showStatus: boolean; desktop: boolean; }
-const DEFAULTS: Settings = { secretName: "", source: "", sourceKind: "database", canvasPath: "Papers.canvas", fields: DEFAULT_FIELDS, showStatus: false, desktop: true };
+import { CardSize, cardSize, CanvasHandle, CanvasInteractions, DEFAULT_CARD_SIZE } from "./interactions";
+interface Settings extends CardSize { secretName: string; source: string; sourceKind: "database" | "data-source"; canvasPath: string; fields: Fields; showStatus: boolean; desktop: boolean; }
+const DEFAULTS: Settings = { ...DEFAULT_CARD_SIZE, secretName: "", source: "", sourceKind: "database", canvasPath: "Papers.canvas", fields: DEFAULT_FIELDS, showStatus: false, desktop: true };
 interface NativeView {
   file?: TFile;
-  canvas?: { getData?: () => unknown; requestPushHistory?: { run?: () => void } };
+  contentEl?: HTMLElement;
+  canvas?: CanvasHandle & { getData?: () => unknown; requestPushHistory?: { run?: () => void } };
   setViewData?: (data: string, clear: boolean) => void;
   save?: () => Promise<void>;
 }
@@ -21,11 +23,13 @@ export default class NotionPapersCanvas extends Plugin {
   settings: Settings = { ...DEFAULTS, fields: { ...DEFAULT_FIELDS } };
   private operation: AbortController | null = null;
   private actions = new Map<WorkspaceLeaf, HTMLElement>();
+  private boards = new Map<WorkspaceLeaf, { canvas: CanvasHandle; interactions: CanvasInteractions; toolbar?: HTMLElement; button?: HTMLButtonElement }>();
+  private actionsQueued = false;
   private stopped = false;
   private settingsWrite: Promise<void> = Promise.resolve();
   async onload() {
     const saved = object(await this.loadData());
-    this.settings = { ...DEFAULTS, ...saved, fields: { ...DEFAULT_FIELDS, ...object(saved.fields) } };
+    this.settings = { ...DEFAULTS, ...saved, ...cardSize(saved), fields: { ...DEFAULT_FIELDS, ...object(saved.fields) } };
     // Persist only explicitly supported settings; never store credentials or page bodies.
     this.addSettingTab(new PapersSettings(this.app, this));
     this.addCommand({ id: "refresh-papers", name: "Refresh papers from Notion", callback: () => { void this.refresh(); } });
@@ -36,9 +40,11 @@ export default class NotionPapersCanvas extends Plugin {
       const payload = parsePayload(source);
       if (!payload) { el.textContent = "Paper card data is invalid. Undo its text edit, then refresh."; return; }
       renderCard(el, payload, { showStatus: this.settings.showStatus, icon: element => setIcon(element, "file-text"), open: id => { void this.openPaper(id); } });
+      this.scheduleActions();
     });
     this.registerEvent(this.app.workspace.on("layout-change", () => this.updateActions()));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.updateActions()));
+    this.registerEvent(this.app.workspace.on("file-open", () => this.updateActions()));
     this.app.workspace.onLayoutReady(() => { if (!this.stopped) this.updateActions(); });
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       if (oldPath === this.settings.canvasPath && file instanceof TFile && file.extension === "canvas") {
@@ -46,10 +52,15 @@ export default class NotionPapersCanvas extends Plugin {
       }
     }));
   }
-  onunload() { this.stopped = true; this.operation?.abort(); for (const el of this.actions.values()) el.remove(); this.actions.clear(); }
+  onunload() {
+    this.stopped = true; this.operation?.abort();
+    for (const el of this.actions.values()) el.remove(); this.actions.clear();
+    for (const board of this.boards.values()) { board.interactions.dispose(); board.toolbar?.remove(); }
+    this.boards.clear();
+  }
   saveSettings(): Promise<void> {
     const s = this.settings;
-    const data = { secretName: s.secretName, source: s.source, sourceKind: s.sourceKind, canvasPath: s.canvasPath, fields: { ...s.fields }, showStatus: s.showStatus, desktop: s.desktop };
+    const data = { secretName: s.secretName, source: s.source, sourceKind: s.sourceKind, canvasPath: s.canvasPath, fields: { ...s.fields }, showStatus: s.showStatus, desktop: s.desktop, ...cardSize(s) };
     this.settingsWrite = this.settingsWrite.catch(() => {}).then(() => this.saveData(data));
     this.updateActions(); return this.settingsWrite;
   }
@@ -57,7 +68,42 @@ export default class NotionPapersCanvas extends Plugin {
     if (!this.stopped) new Notice(error instanceof UserError ? error.message : "Could not update Papers Canvas. Your layout remains in the Canvas; check settings and try again.", 8000);
   }
   private updateActions() {
+    if (this.stopped) return;
     const leaves = this.app.workspace.getLeavesOfType("canvas");
+    for (const [leaf, board] of this.boards) {
+      if (!leaves.includes(leaf) || (leaf.view as unknown as NativeView).canvas !== board.canvas) {
+        board.interactions.dispose(); board.toolbar?.remove(); this.boards.delete(leaf);
+      }
+    }
+    for (const leaf of leaves) {
+      const view = leaf.view as unknown as NativeView, canvas = view.canvas;
+      if (!canvas) continue;
+      let board = this.boards.get(leaf);
+      if (!board) {
+        board = { canvas, interactions: new CanvasInteractions(canvas, view.contentEl, () => cardSize(this.settings)) };
+        this.boards.set(leaf, board);
+      } else board.interactions.update();
+      const controls = canvas.canvasControlsEl;
+      const isTarget = view.file?.path === this.settings.canvasPath;
+      if (board.toolbar && (!isTarget || board.toolbar.parentElement !== controls)) {
+        board.toolbar.remove(); board.toolbar = undefined; board.button = undefined;
+      }
+      if (isTarget && controls && !board.toolbar) {
+        const doc = controls.ownerDocument;
+        const toolbar = doc.createElement("div"); toolbar.className = "canvas-control-group mod-raised npc-toolbar";
+        const button = doc.createElement("button"); button.type = "button"; button.className = "npc-refresh-button";
+        button.title = "Refresh papers from Notion";
+        button.addEventListener("click", () => { void this.refresh(); });
+        toolbar.append(button); controls.prepend(toolbar);
+        board.toolbar = toolbar; board.button = button;
+      }
+      if (board.button) {
+        board.button.disabled = !!this.operation;
+        const label = this.operation ? "Refreshing…" : "Refresh papers";
+        if (board.button.textContent !== label) board.button.textContent = label;
+        board.button.setAttribute("aria-busy", String(!!this.operation));
+      }
+    }
     for (const [leaf, el] of this.actions) {
       if (!leaves.includes(leaf) || (leaf.view as unknown as NativeView).file?.path !== this.settings.canvasPath) { el.remove(); this.actions.delete(leaf); }
     }
@@ -67,6 +113,11 @@ export default class NotionPapersCanvas extends Plugin {
       this.actions.set(leaf, el);
     }
     for (const el of this.actions.values()) { el.classList.toggle("npc-refreshing", !!this.operation); el.setAttribute("aria-busy", String(!!this.operation)); }
+  }
+  private scheduleActions() {
+    if (this.actionsQueued || this.stopped) return;
+    this.actionsQueued = true;
+    void Promise.resolve().then(() => { this.actionsQueued = false; if (!this.stopped) this.updateActions(); });
   }
   async openBoard(path = canvasPath(this.settings.canvasPath)) {
     const file = this.app.vault.getAbstractFileByPath(path);
@@ -126,7 +177,8 @@ export default class NotionPapersCanvas extends Plugin {
       const { sourceId, papers } = await client.readAll(settings.source, settings.sourceKind, settings.fields);
       if (settings.canvasPath !== this.settings.canvasPath || settings.source !== this.settings.source || settings.sourceKind !== this.settings.sourceKind)
         throw new UserError("The source or Canvas path changed during refresh. Click Refresh again.");
-      const result = await commitPapers(this.store(path), sourceId, papers, controller.signal);
+      const size = cardSize(this.settings);
+      const result = await commitPapers(this.store(path), sourceId, papers, controller.signal, { width: size.cardWidth, height: size.cardHeight });
       if (this.stopped) return;
       new Notice(`Papers refreshed: ${result.added} added, ${result.updated} updated, ${result.retained} unavailable cards kept.`, 6000);
       await this.openBoard(path);
@@ -150,9 +202,21 @@ class PapersSettings extends PluginSettingTab {
     new Setting(el).setName("Refresh papers").setDesc("Read all papers and update cards while keeping their positions, sizes, groups, and connections.")
       .addButton(b => b.setButtonText("Refresh papers").setCta().onClick(() => { void p.refresh(); }));
     new Setting(el).setName("Card display").setHeading();
-    new Setting(el).setName("Show status").setDesc("Off matches the compact title, tags, venue, and summary layout. Reopen the Canvas after changing this.")
+    new Setting(el).setName("Fixed card size").setDesc("Keep Notion cards at the size below, independently of Advanced Canvas minimum sizes. Cards can still move and connect.")
+      .addToggle(t => t.setValue(p.settings.fixedCardSize).onChange(async v => { p.settings.fixedCardSize = v; await p.saveSettings(); }));
+    for (const [key, label, min] of [["cardWidth", "Card width", 240], ["cardHeight", "Card height", 120]] as const) {
+      new Setting(el).setName(label).setDesc(`Pixels (${min}–2000). Applies to new cards and all cards with fixed sizing on.`)
+        .addText(t => {
+          t.inputEl.type = "number"; t.inputEl.min = String(min); t.inputEl.max = "2000"; t.inputEl.step = "1";
+          t.setValue(String(p.settings[key])).onChange(async value => {
+            const n = Number(value); if (!Number.isInteger(n) || n < min || n > 2000) return;
+            p.settings[key] = n; await p.saveSettings();
+          });
+        });
+    }
+    new Setting(el).setName("Show status").setDesc("Show a status badge below the summary. Screening papers always use a pin icon to mark unread items. Reopen the Canvas after changing this.")
       .addToggle(t => t.setValue(p.settings.showStatus).onChange(async v => { p.settings.showStatus = v; await p.saveSettings(); }));
-    new Setting(el).setName("Open in desktop app").setDesc("Titles open the Notion desktop app. Turn off to use your browser.")
+    new Setting(el).setName("Open in desktop app").setDesc("Titles open a new Notion tab, or focus the page's existing tab. Turn off to use your browser.")
       .addToggle(t => t.setValue(p.settings.desktop).onChange(async v => { p.settings.desktop = v; await p.saveSettings(); }));
     new Setting(el).setName("Notion property names").setHeading();
     for (const key of Object.keys(DEFAULT_FIELDS) as (keyof Fields)[]) {

@@ -24,7 +24,7 @@ export function parseCanvas(text: string): CanvasData {
   return data;
 }
 /** Pure merge: only managed text changes. Existing geometry, order, edges and unknown fields survive. */
-export function mergePapers(input: CanvasData, source: string, papers: Paper[]): SyncResult {
+export function mergePapers(input: CanvasData, source: string, papers: Paper[], newCardSize = { width: 360, height: 210 }): SyncResult {
   const sourceId = notionId(source);
   const byId = new Map<string, Paper>();
   for (const paper of papers) {
@@ -56,7 +56,8 @@ export function mergePapers(input: CanvasData, source: string, papers: Paper[]):
     const unique = (base: string) => { let id = base, suffix = 1; while (ids.has(id)) id = `${base}_${suffix++}`; ids.add(id); return id; };
     const x = nodes.length ? Math.ceil(Math.max(...nodes.map(n => n.x + n.width))) + 160 : 0;
     const y = nodes.length ? Math.floor(Math.min(...nodes.map(n => n.y))) : 0;
-    const width = 360, height = 210, gap = 32, padding = 32;
+    const { width, height } = newCardSize;
+    const gap = 32, padding = 32;
     const columns = Math.min(4, fresh.length), rows = Math.ceil(fresh.length / columns);
     nodes.push({ id: unique("npc_unsorted"), type: "group", label: "Unsorted · Notion", x, y,
       width: columns * (width + gap) - gap + padding * 2, height: rows * (height + gap) - gap + padding * 2 });

@@ -7,12 +7,17 @@ export function renderCard(container: HTMLElement, payload: CardPayload, options
   const card = doc.createElement("article"); card.className = "npc-card";
   const header = doc.createElement("header"); header.className = "npc-heading";
   const icon = doc.createElement("span"); icon.className = "npc-icon"; icon.setAttribute("aria-hidden", "true");
-  if (options.icon) options.icon(icon); else icon.textContent = "▤";
-  const title = doc.createElement("a"); title.className = "npc-title"; title.textContent = paper.title;
+  if (paper.status?.name.trim().toLowerCase() === "screening") {
+    icon.classList.add("npc-unread-icon"); icon.textContent = "📌";
+    icon.title = "Unread · Screening";
+    icon.removeAttribute("aria-hidden"); icon.setAttribute("role", "img"); icon.setAttribute("aria-label", "Unread · Screening");
+  } else if (options.icon) options.icon(icon); else icon.textContent = "▤";
+  const title = doc.createElement("a"); title.className = "npc-title interactive-child"; title.textContent = paper.title;
   title.href = pageUrl(paper.id); title.title = "Open in Notion"; title.draggable = false;
   title.addEventListener("pointerdown", event => event.stopPropagation());
   title.addEventListener("mousedown", event => event.stopPropagation());
   title.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); options.open(paper.id); });
+  title.addEventListener("dblclick", event => { event.preventDefault(); event.stopPropagation(); });
   title.addEventListener("keydown", event => { if (event.key === "Enter") event.stopPropagation(); });
   header.append(icon, title); card.append(header);
   const meta = doc.createElement("div"); meta.className = "npc-meta";

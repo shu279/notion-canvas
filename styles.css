@@ -1,4 +1,9 @@
-/* Scoped to paper cards; the native Canvas still owns movement and sizing. */
+/* Scoped to paper cards; native Canvas still owns selection, movement and edges. */
+.canvas-node.npc-managed-node .canvas-node-content-blocker { pointer-events: none; }
+.canvas-node.npc-managed-node .canvas-node-content { overflow: auto; }
+.canvas-controls .npc-toolbar { align-self: flex-end; }
+.canvas-controls .npc-refresh-button { height: 32px; padding: 0 10px; white-space: nowrap; font-size: 12px; box-shadow: none; }
+.canvas-controls .npc-refresh-button:disabled { opacity: .6; cursor: wait; }
 .canvas-node:has(.npc-card) .canvas-node-container { border-radius: 12px; }
 .canvas-node-content:has(.npc-card) .markdown-preview-view { padding: 12px; }
 .canvas-node-content:has(.npc-card) .markdown-preview-sizer { min-height: 0 !important; }
@@ -7,6 +12,7 @@
 .npc-heading { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 12px; }
 .npc-icon { flex: 0 0 19px; color: var(--text-muted); padding-top: 2px; }
 .npc-icon svg { width: 19px; height: 19px; }
+.npc-icon.npc-unread-icon { font-size: 19px; line-height: 1.3; }
 .npc-card a.npc-title { color: var(--text-normal); font-size: 17px; font-weight: 600; line-height: 1.45; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
 .npc-card a.npc-title:hover { text-decoration: underline; }
 .npc-card a.npc-title:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 3px; border-radius: 3px; }

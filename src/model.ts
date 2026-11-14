@@ -28,7 +28,9 @@ export function notionId(input: string): string {
   return `${raw.slice(0,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}-${raw.slice(16,20)}-${raw.slice(20)}`;
 }
 export function pageUrl(id: string, desktop = false): string {
-  return `${desktop ? "notion" : "https"}://www.notion.so/${notionId(id).replace(/-/g, "")}`;
+  const path = `www.notion.so/${notionId(id).replace(/-/g, "")}`;
+  // Notion's protocol handler opens a new tab, or focuses this page's existing tab.
+  return desktop ? `notion://${path}?deepLinkOpenNewTab=true` : `https://${path}`;
 }
 export function encodeCard(payload: CardPayload): string {
   return '```notion-paper\n' + JSON.stringify(payload) + '\n```';

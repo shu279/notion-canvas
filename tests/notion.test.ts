@@ -53,7 +53,8 @@ test("optional fields can be omitted and title can be auto-detected", async () =
 });
 test("Notion URLs ignore view IDs and external desktop URLs are constructed from validated IDs",()=>{
   assert.equal(notionId(`https://www.notion.so/Papers-${DB.replace(/-/g,"")}?v=${ID}`),DB);
-  assert.equal(pageUrl(ID,true),`notion://www.notion.so/${ID.replace(/-/g,"")}`);
+  assert.equal(pageUrl(ID,true),`notion://www.notion.so/${ID.replace(/-/g,"")}?deepLinkOpenNewTab=true`);
+  assert.equal(pageUrl(ID),`https://www.notion.so/${ID.replace(/-/g,"")}`);
   for(const value of ["javascript:alert(1)",`https://notion.so.evil.test/${ID}`,`https://user:pass@notion.so/${ID}`,"../etc/passwd"])
     assert.throws(()=>notionId(value));
 });
