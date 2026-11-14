@@ -1,0 +1,9 @@
+{
+  "id": "notion-papers-canvas",
+  "name": "Notion Papers Canvas",
+  "version": "0.1.0",
+  "minAppVersion": "1.11.4",
+  "description": "Arrange Notion papers in Canvas while preserving card positions, groups, and connections.",
+  "author": "Shu",
+  "isDesktopOnly": true
+}
