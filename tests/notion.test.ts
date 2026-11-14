@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NotionClient, mapPage, NOTION_VERSION, Transport } from "../src/notion.ts";
-import { DEFAULT_FIELDS, notionId, pageUrl } from "../src/model.ts";
+import { canonicalPageUrl, DEFAULT_FIELDS, notionId, pageUrl } from "../src/model.ts";
 import { DB, SOURCE, ID, ID2, page, schema, sample } from "./fixtures.ts";
 const response = (body: unknown, status = 200, headers = {}) => ({ body, status, headers });
 const client = (transport: Transport, pause = async (_: number) => {}) => new NotionClient(transport, "test-not-a-real-token", new AbortController().signal, pause);
@@ -57,6 +57,56 @@ test("Notion URLs ignore view IDs and external desktop URLs are constructed from
   assert.equal(pageUrl(ID),`https://www.notion.so/${ID.replace(/-/g,"")}`);
   for(const value of ["javascript:alert(1)",`https://notion.so.evil.test/${ID}`,`https://user:pass@notion.so/${ID}`,"../etc/passwd"])
     assert.throws(()=>notionId(value));
+});
+test("API page URLs retain their title path so Notion can match an already-open tab",async()=>{
+  const suffix=`Diffusion-Models-Beat-GANs-on-Image-Synthesis-${ID.replace(/-/g,"")}`;
+  const canonical=`https://app.notion.com/p/${suffix}`;
+  const apiPage={...page(),url:`${canonical}?pvs=4#ignored-fragment`};
+  assert.deepEqual(mapPage(apiPage,DEFAULT_FIELDS),{...sample,url:canonical});
+  let call=0;
+  const result=await client(async()=>++call===1?response(schema):response({results:[apiPage],has_more:false})).readAll(SOURCE,"data-source");
+  const desktop=pageUrl(result.papers[0].id,true,result.papers[0].url);
+  assert.equal(desktop,`notion://app.notion.com/p/${suffix}?deepLinkOpenNewTab=true`);
+  assert.equal(pageUrl(ID,false,canonical),canonical);
+  // Notion's native matcher uses the final path segment, including the title.
+  // The former UUID-only URL differed even though both links opened the same page.
+  const finalSegment=(url:string)=>new URL(url).pathname.split('/').at(-1);
+  assert.notEqual(finalSegment(pageUrl(ID,true)),finalSegment(canonical));
+  assert.equal(finalSegment(desktop),finalSegment(canonical));
+});
+test("canonical page links reject external destinations and mismatched IDs, with legacy-safe fallback",()=>{
+  const compact=ID.replace(/-/g,"");
+  const fallback=`https://www.notion.so/${compact}`;
+  for(const value of [
+    undefined,null,42,{url:fallback},"javascript:alert(1)","../etc/passwd",
+    `http://app.notion.com/p/Example-${compact}`,
+    `notion://app.notion.com/p/Example-${compact}`,
+    `https://app.notion.com.evil.test/p/Example-${compact}`,
+    `https://evil.test/p/Example-${compact}`,
+    `https://example.notion.site/p/Example-${compact}`,
+    `https://user:pass@app.notion.com/p/Example-${compact}`,
+    `https://app.notion.com:8443/p/Example-${compact}`,
+    `https://app.notion.com/p/Other-${ID2.replace(/-/g,"")}`
+  ]){
+    assert.equal(canonicalPageUrl(ID,value),undefined);
+    if(typeof value==='string'){
+      assert.equal(pageUrl(ID,false,value),fallback);
+      assert.equal(pageUrl(ID,true,value),`notion://www.notion.so/${compact}?deepLinkOpenNewTab=true`);
+      assert.deepEqual(mapPage({...page(),url:value},DEFAULT_FIELDS),sample);
+    }
+  }
+  assert.deepEqual(mapPage(page(),DEFAULT_FIELDS),sample);
+  assert.equal(pageUrl(ID,true),`notion://www.notion.so/${compact}?deepLinkOpenNewTab=true`);
+});
+test("canonical page links preserve old Notion slugs and encoded titles while discarding query controls",()=>{
+  const compact=ID.replace(/-/g,"");
+  for(const candidate of [
+    `https://www.notion.so/My-page-${compact}`,
+    `https://app.notion.com/p/%E6%9C%AA%E8%AA%AD-${compact}`
+  ]){
+    assert.equal(canonicalPageUrl(ID,`${candidate}?p=other-page&deepLinkTargetTabId=unexpected&deepLinkOpenNewTab=false#section`),candidate);
+    assert.equal(pageUrl(ID,true,`${candidate}?deepLinkTargetTabId=unexpected`),`${candidate.replace(/^https:/,'notion:')}?deepLinkOpenNewTab=true`);
+  }
 });
 test("aborting a pending response stops before returning any papers",async()=>{
   const abort=new AbortController(); let done!: (v:any)=>void;

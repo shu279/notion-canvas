@@ -39,7 +39,7 @@ export default class NotionPapersCanvas extends Plugin {
     this.registerMarkdownCodeBlockProcessor("notion-paper", (source, el) => {
       const payload = parsePayload(source);
       if (!payload) { el.textContent = "Paper card data is invalid. Undo its text edit, then refresh."; return; }
-      renderCard(el, payload, { showStatus: this.settings.showStatus, icon: element => setIcon(element, "file-text"), open: id => { void this.openPaper(id); } });
+      renderCard(el, payload, { showStatus: this.settings.showStatus, icon: element => setIcon(element, "file-text"), open: (id, url) => { void this.openPaper(id, url); } });
       this.scheduleActions();
     });
     this.registerEvent(this.app.workspace.on("layout-change", () => this.updateActions()));
@@ -126,10 +126,10 @@ export default class NotionPapersCanvas extends Plugin {
     if (existing) { await this.app.workspace.revealLeaf(existing); return; }
     await this.app.workspace.getLeaf("tab").openFile(file);
   }
-  private async openPaper(id: string) {
+  private async openPaper(id: string, canonicalUrl?: string) {
     try {
       const { shell } = require("electron") as { shell: { openExternal: (url: string) => Promise<void> } };
-      await shell.openExternal(pageUrl(id, this.settings.desktop));
+      await shell.openExternal(pageUrl(id, this.settings.desktop, canonicalUrl));
     } catch { new Notice("Could not open Notion. Install the desktop app, or turn off 'Open in desktop app' in settings.", 7000); }
   }
   private store(path: string): CanvasStore {

@@ -1,6 +1,6 @@
 import { CardPayload, pageUrl } from "./model";
 const COLORS = new Set(["default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]);
-export interface CardOptions { showStatus: boolean; open: (pageId: string) => void; icon?: (el: HTMLElement) => void; }
+export interface CardOptions { showStatus: boolean; open: (pageId: string, canonicalUrl?: string) => void; icon?: (el: HTMLElement) => void; }
 /** Build DOM with textContent only; Notion property values never become HTML. */
 export function renderCard(container: HTMLElement, payload: CardPayload, options: CardOptions): void {
   const doc = container.ownerDocument, paper = payload.paper;
@@ -13,10 +13,10 @@ export function renderCard(container: HTMLElement, payload: CardPayload, options
     icon.removeAttribute("aria-hidden"); icon.setAttribute("role", "img"); icon.setAttribute("aria-label", "Unread · Screening");
   } else if (options.icon) options.icon(icon); else icon.textContent = "▤";
   const title = doc.createElement("a"); title.className = "npc-title interactive-child"; title.textContent = paper.title;
-  title.href = pageUrl(paper.id); title.title = "Open in Notion"; title.draggable = false;
+  title.href = pageUrl(paper.id, false, paper.url); title.title = "Open in Notion"; title.draggable = false;
   title.addEventListener("pointerdown", event => event.stopPropagation());
   title.addEventListener("mousedown", event => event.stopPropagation());
-  title.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); options.open(paper.id); });
+  title.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); options.open(paper.id, paper.url); });
   title.addEventListener("dblclick", event => { event.preventDefault(); event.stopPropagation(); });
   title.addEventListener("keydown", event => { if (event.key === "Enter") event.stopPropagation(); });
   header.append(icon, title); card.append(header);

@@ -1,6 +1,6 @@
 {
   "name": "notion-papers-canvas",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Arrange Notion papers in native Obsidian Canvas without losing your layout.",
   "license": "MIT",

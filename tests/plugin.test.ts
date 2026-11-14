@@ -6,6 +6,7 @@ import { JSDOM } from "jsdom";
 import { sample, SOURCE, DB, schema, page } from "./fixtures.ts";
 import { DEFAULT_FIELDS, decodeCard, encodeCard } from "../src/model.ts";
 const bundle = buildSync({ entryPoints: ["src/main.ts"], bundle:true,write:false,minify:true,platform:"browser",target:"es2022",format:"cjs",external:["obsidian","electron"] }).outputFiles[0].text;
+const sampleUrl = `https://app.notion.com/p/Diffusion-Models-Beat-GANs-on-Image-Synthesis-${sample.id.replace(/-/g,'')}`;
 function fixture() {
  const dom=new JSDOM('<body></body>');
  const notices:string[]=[],commands=new Map<string,any>(),renderers=new Map<string,any>(),requests:any[]=[],files=new Map<string,{file:any,content:string}>();
@@ -27,7 +28,7 @@ function fixture() {
  }
  const obsidian={Plugin,PluginSettingTab:class{},Notice,TFile,normalizePath:(s:string)=>s,setIcon:()=>{},
   requestUrl:async(req:any)=>{requests.push(req);if(fail)return{status:403,headers:{},text:'{"message":"fixture-secret"}'};
-   const body=req.url.endsWith('/query')?{results:[page()],has_more:false}:req.url.includes('/databases/')?{data_sources:[{id:SOURCE}]}:schema;
+   const body=req.url.endsWith('/query')?{results:[{...page(),url:sampleUrl}],has_more:false}:req.url.includes('/databases/')?{data_sources:[{id:SOURCE}]}:schema;
    return{status:200,headers:{},text:JSON.stringify(body)};}};
  const module={exports:{} as any};const external:string[]=[];
  new Script(bundle).runInNewContext({module,exports:module.exports,require:(name:string)=>name==='obsidian'?obsidian:{shell:{openExternal:async(url:string)=>{external.push(url);}}},AbortController,URL,Map,Set,console,setTimeout,clearTimeout});
@@ -40,14 +41,16 @@ test("production plugin creates a native Canvas through its registered refresh c
  await f.plugin.refresh();
  const entry=f.files.get('Papers.canvas')!;assert.ok(entry);const data=JSON.parse(entry.content);
  assert.equal(data.nodes.length,2);assert.equal(decodeCard(data.nodes[1].text)!.paper.title,sample.title);
+ assert.equal(decodeCard(data.nodes[1].text)!.paper.url,sampleUrl);
  assert.deepEqual(f.opened,['Papers.canvas']);
  const el=f.dom.window.document.createElement('div');
  f.renderers.get('notion-paper')(data.nodes[1].text.split('\n')[1],el);
+ assert.equal(el.querySelector('a')!.href,sampleUrl);
  el.querySelector('a')!.dispatchEvent(new f.dom.window.MouseEvent('click',{bubbles:true,cancelable:true}));
- assert.equal(f.external.length,1);assert.equal(f.external[0],`notion://www.notion.so/${sample.id.replace(/-/g,'')}?deepLinkOpenNewTab=true`);
+ assert.equal(f.external.length,1);assert.equal(f.external[0],sampleUrl.replace('https:','notion:')+'?deepLinkOpenNewTab=true');
  f.plugin.settings.desktop=false;
  el.querySelector('a')!.dispatchEvent(new f.dom.window.MouseEvent('click',{bubbles:true,cancelable:true}));
- assert.equal(f.external[1],`https://www.notion.so/${sample.id.replace(/-/g,'')}`);
+ assert.equal(f.external[1],sampleUrl);
  await f.plugin.saveSettings();assert.equal(JSON.stringify(f.plugin.settingsData).includes('fixture-secret'),false);
  assert.ok(f.requests.every(r=>r.method==='GET'||r.url.endsWith('/query')));
  }finally{f.plugin.onunload();f.dom.window.close();}

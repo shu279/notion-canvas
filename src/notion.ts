@@ -1,4 +1,4 @@
-import { DEFAULT_FIELDS, Fields, notionId, object, Paper, Tag, UserError } from "./model";
+import { canonicalPageUrl, DEFAULT_FIELDS, Fields, notionId, object, Paper, Tag, UserError } from "./model";
 export const NOTION_VERSION = "2025-09-03";
 export interface Response { status: number; headers: Record<string, string>; body: unknown; }
 export type Transport = (request: { url: string; method: "GET" | "POST"; headers: Record<string,string>; body?: string }) => Promise<Response>;
@@ -19,8 +19,9 @@ export function mapPage(value: unknown, fields: Fields): Paper {
   if (page.object !== "page" || typeof page.id !== "string") throw new UserError("Notion returned an incomplete page. No Canvas changes were made.");
   for (const name of Object.values(fields).filter(Boolean)) if (!props[name]) throw new UserError("A Notion page is missing a mapped property. Check the field names in settings.");
   const tags = object(props[fields.tags]), status = object(props[fields.status]);
+  const url = canonicalPageUrl(page.id, page.url);
   return {
-    id: notionId(page.id), title: textProperty(props[fields.title]) || "Untitled paper", about: textProperty(props[fields.about]),
+    id: notionId(page.id), ...(url ? { url } : {}), title: textProperty(props[fields.title]) || "Untitled paper", about: textProperty(props[fields.about]),
     tags: tags.type === "multi_select" && Array.isArray(tags.multi_select) ? tags.multi_select.map(tag).filter((t): t is Tag => !!t) : [],
     venue: textProperty(props[fields.venue]), status: tag(status[status.type]),
     availability: page.archived === true || page.is_archived === true || page.in_trash === true ? "archived" : "active"

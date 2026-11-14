@@ -1,6 +1,8 @@
 export interface Tag { name: string; color: string; }
 export interface Paper {
   id: string;
+  /** Canonical page URL supplied by Notion, including its title slug. */
+  url?: string;
   title: string;
   about: string;
   tags: Tag[];
@@ -27,10 +29,24 @@ export function notionId(input: string): string {
   const raw = match[1].replace(/-/g, "").toLowerCase();
   return `${raw.slice(0,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}-${raw.slice(16,20)}-${raw.slice(20)}`;
 }
-export function pageUrl(id: string, desktop = false): string {
-  const path = `www.notion.so/${notionId(id).replace(/-/g, "")}`;
-  // Notion's protocol handler opens a new tab, or focuses this page's existing tab.
-  return desktop ? `notion://${path}?deepLinkOpenNewTab=true` : `https://${path}`;
+export function canonicalPageUrl(id: string, candidate: unknown): string | undefined {
+  if (typeof candidate !== "string") return undefined;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" || url.username || url.password || url.port ||
+        !["notion.so", "notion.com"].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)) ||
+        notionId(url.href) !== notionId(id)) return undefined;
+    // Stored metadata may be edited by hand. Never forward arbitrary query
+    // options (redirects, peeks, etc.) or fragments to the desktop app.
+    url.search = ""; url.hash = "";
+    return url.href;
+  } catch { return undefined; }
+}
+export function pageUrl(id: string, desktop = false, canonicalUrl?: string): string {
+  const webUrl = canonicalPageUrl(id, canonicalUrl) ?? `https://www.notion.so/${notionId(id).replace(/-/g, "")}`;
+  // Desktop tab reuse compares the complete final path segment, including the
+  // title slug. ID-only links open the page but cannot match a titled tab.
+  return desktop ? `${webUrl.replace(/^https:/, "notion:")}?deepLinkOpenNewTab=true` : webUrl;
 }
 export function encodeCard(payload: CardPayload): string {
   return '```notion-paper\n' + JSON.stringify(payload) + '\n```';
@@ -45,6 +61,7 @@ export function parsePayload(source: string): CardPayload | null {
     const data = JSON.parse(source), p = object(data.paper);
     if (data.version !== 1 || typeof data.sourceId !== "string" || typeof p.id !== "string") return null;
     notionId(data.sourceId); notionId(p.id);
+    if (p.url !== undefined && !canonicalPageUrl(p.id, p.url)) return null;
     if (![p.title, p.about, p.venue].every(v => typeof v === "string") || !Array.isArray(p.tags) ||
       !p.tags.every(t => typeof t?.name === "string" && typeof t?.color === "string") ||
       (p.status !== null && (typeof p.status?.name !== "string" || typeof p.status?.color !== "string")) ||

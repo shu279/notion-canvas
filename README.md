@@ -2,7 +2,7 @@
 
 Arrange any Notion database in **Obsidian's native Canvas** — projects, books, ideas, research, or anything else you track in Notion. Map your database properties in settings to choose what appears on each card.
 
-Drag cards, create groups, and draw connections. Refresh their contents without losing your layout. Click a card's title to open it in a new Notion desktop tab, or switch to its existing tab.
+Drag cards, create groups, and draw connections. Refresh their contents without losing your layout. Click a card's title to open it in Notion. A matching page tab is reused; otherwise a new tab opens.
 
 ## Install
 
@@ -32,6 +32,8 @@ The defaults are `Paper`, `About`, `Tags`, `Venue`, and `Status`. **Rename these
 Each Canvas uses one data source. Choose a different Canvas path when switching databases. Entries with a `Screening` status show a 📌 icon.
 
 Click **Refresh papers** on the right side of the Canvas to update anytime. The ribbon icon and **Refresh papers from Notion** command also work. Turn off **Open in desktop app** to use your browser instead.
+
+After upgrading, refresh once to load Notion's full page URLs for existing-tab matching. If a page was renamed, refresh its link again; Notion matches the title in the URL as well as the page ID.
 
 Cards default to a fixed **360 × 210** size. Change **Card width / height**, or turn off **Fixed card size** to resize freely. Keep the Canvas editable to move cards and draw connections; edit entry details in Notion.
 
