@@ -1,8 +1,10 @@
 # Notion Canvas
 
-Arrange any Notion database in **Obsidian's native Canvas** — projects, books, ideas, research, or anything else you track in Notion. Map your database properties in settings to choose what appears on each card.
+Arrange any Notion database in **Obsidian's native Canvas** — projects, books, ideas, research, or anything else you track in Notion.
 
-Drag cards, create groups, and draw connections. Refresh their contents without losing your layout. Click a card's title to open it in Notion. A matching page tab is reused; otherwise a new tab opens.
+Drag cards, create groups, and draw connections. Click a card's title to open it in Notion.
+
+![image](./images/pasted_20261114-032125.png)
 
 ## Install
 
