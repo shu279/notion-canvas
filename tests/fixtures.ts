@@ -9,4 +9,4 @@ export function page(id = ID) { return { object: "page", id, properties: {
   Paper: { type: "title", title: rich(sample.title) }, About: { type: "rich_text", rich_text: rich(sample.about) },
   Tags: { type: "multi_select", multi_select: sample.tags }, Venue: { type: "rich_text", rich_text: rich(sample.venue) }, Status: { type: "select", select: sample.status }
 } }; }
-export const schema = { properties: Object.fromEntries(Object.entries(DEFAULT_FIELDS).map(([key,name]) => [name, { type: { title: "title", about: "rich_text", tags: "multi_select", venue: "rich_text", status: "select" }[key] }])) };
+export const schema = { properties: Object.fromEntries(Object.entries(DEFAULT_FIELDS).filter(([,name]) => name).map(([key,name]) => [name, { type: { title: "title", about: "rich_text", tags: "multi_select", venue: "rich_text", affiliation: "rich_text", status: "select" }[key] }])) };

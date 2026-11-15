@@ -7,12 +7,13 @@ export interface Paper {
   about: string;
   tags: Tag[];
   venue: string;
+  affiliation?: string;
   status: Tag | null;
   availability: "active" | "archived" | "missing";
 }
 export interface CardPayload { version: 1; sourceId: string; paper: Paper; }
-export interface Fields { title: string; about: string; tags: string; venue: string; status: string; }
-export const DEFAULT_FIELDS: Fields = { title: "Paper", about: "About", tags: "Tags", venue: "Venue", status: "Status" };
+export interface Fields { title: string; about: string; tags: string; venue: string; affiliation: string; status: string; }
+export const DEFAULT_FIELDS: Fields = { title: "Paper", about: "About", tags: "Tags", venue: "Venue", affiliation: "", status: "Status" };
 export class UserError extends Error {}
 export const object = (v: unknown): Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, any> : {};
 export function notionId(input: string): string {
@@ -62,6 +63,7 @@ export function parsePayload(source: string): CardPayload | null {
     if (data.version !== 1 || typeof data.sourceId !== "string" || typeof p.id !== "string") return null;
     notionId(data.sourceId); notionId(p.id);
     if (p.url !== undefined && !canonicalPageUrl(p.id, p.url)) return null;
+    if (p.affiliation !== undefined && typeof p.affiliation !== "string") return null;
     if (![p.title, p.about, p.venue].every(v => typeof v === "string") || !Array.isArray(p.tags) ||
       !p.tags.every(t => typeof t?.name === "string" && typeof t?.color === "string") ||
       (p.status !== null && (typeof p.status?.name !== "string" || typeof p.status?.color !== "string")) ||

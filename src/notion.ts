@@ -24,6 +24,7 @@ export function mapPage(value: unknown, fields: Fields): Paper {
     id: notionId(page.id), ...(url ? { url } : {}), title: textProperty(props[fields.title]) || "Untitled paper", about: textProperty(props[fields.about]),
     tags: tags.type === "multi_select" && Array.isArray(tags.multi_select) ? tags.multi_select.map(tag).filter((t): t is Tag => !!t) : [],
     venue: textProperty(props[fields.venue]), status: tag(status[status.type]),
+    ...(fields.affiliation ? { affiliation: textProperty(props[fields.affiliation]) } : {}),
     availability: page.archived === true || page.is_archived === true || page.in_trash === true ? "archived" : "active"
   };
 }
@@ -70,7 +71,7 @@ export class NotionClient {
     const schema = await this.call(`data_sources/${sourceId}`);
     const props = object(schema.properties), fields = { ...mapping };
     if (!fields.title) fields.title = Object.keys(props).find(key => props[key]?.type === "title") ?? "";
-    const accepted: Record<keyof Fields, string[]> = { title: ["title"], about: ["rich_text", "formula"], tags: ["multi_select"], venue: ["rich_text", "select", "multi_select", "formula"], status: ["status", "select"] };
+    const accepted: Record<keyof Fields, string[]> = { title: ["title"], about: ["rich_text", "formula"], tags: ["multi_select"], venue: ["rich_text", "select", "multi_select", "formula"], affiliation: ["rich_text", "select", "multi_select", "formula"], status: ["status", "select"] };
     for (const key of Object.keys(fields) as (keyof Fields)[]) {
       if (!fields[key] && key !== "title") continue;
       if (!accepted[key].includes(props[fields[key]]?.type)) throw new UserError(`Check the ${key} property mapping in settings. Its name or type does not match Notion.`);

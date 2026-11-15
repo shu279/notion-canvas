@@ -221,7 +221,7 @@ class PapersSettings extends PluginSettingTab {
     new Setting(el).setName("Notion property names").setHeading();
     for (const key of Object.keys(DEFAULT_FIELDS) as (keyof Fields)[]) {
       new Setting(el).setName(key === "title" ? "Title" : key[0].toUpperCase() + key.slice(1))
-        .setDesc(key === "title" ? "Leave blank to detect the title property." : "Leave blank to omit this property.")
+        .setDesc(key === "title" ? "Leave blank to detect the title property." : key === "affiliation" ? "Optional organization or affiliation, shown after Venue. Enter its Notion property name, or leave blank to omit it." : "Leave blank to omit this property.")
         .addText(t => t.setValue(p.settings.fields[key]).onChange(async v => { p.settings.fields[key] = v.trim(); await p.saveSettings(); }));
     }
   }

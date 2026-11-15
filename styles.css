@@ -19,6 +19,7 @@
 .npc-meta { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
 .npc-tag { display: inline-block; border-radius: 4px; padding: 0 7px; line-height: 20px; font-size: 13px; background: var(--background-modifier-hover); color: var(--text-normal); }
 .npc-venue { font-size: 13px; }
+.npc-affiliation { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
 .npc-card p.npc-about { margin: 0; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .npc-status { margin-top: 10px; }
 .npc-card p.npc-availability { margin: 10px 0 0; font-size: 11px; color: var(--text-muted); }

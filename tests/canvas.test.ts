@@ -24,6 +24,41 @@ test("title and metadata changes preserve all geometry, groups, edges, unknown f
   assert.deepEqual(result.data.extension, before.extension);
   assert.deepEqual(board, before, "merge must not mutate its input");
 });
+test("legacy cards accept optional affiliation, while updates and clearing preserve their complete layout",()=>{
+  const { affiliation: _unused, ...legacy } = sample;
+  const legacyPayload={ version: 1 as const, sourceId: SOURCE, paper: legacy };
+  assert.deepEqual(decodeCard(encodeCard(legacyPayload)),legacyPayload);
+  let board=mergePapers({ nodes: [], edges: [] },SOURCE,[legacy]).data;
+  Object.assign(board.nodes[1],{ x: -520, y: 880, width: 740, height: 330, color: "#c0ffee", extension: { retained: true } });
+  board.nodes[0].width=2700;
+  board.nodes.push({ id: "manual", type: "text", text: "Research question", x: 1600, y: -40, width: 600, height: 400 });
+  board.edges.push({ id: "relation", fromNode: board.nodes[1].id, toNode: "manual", fromSide: "right", toSide: "left", label: "supports", extension: { retained: true } });
+  board.extension={ retained: true };
+  for (const paper of [{ ...legacy, affiliation: "University A" },{ ...legacy, affiliation: "Lab B" },{ ...legacy, affiliation: "" },legacy]) {
+    const before=structuredClone(board);
+    const result=mergePapers(board,SOURCE,[paper]);
+    assert.equal(result.added,0);assert.equal(result.updated,1);
+    assert.deepEqual(decodeCard(result.data.nodes[1].text!)!.paper,paper);
+    assert.deepEqual({ ...result.data.nodes[1], text: before.nodes[1].text },before.nodes[1]);
+    assert.deepEqual(result.data.nodes[0],before.nodes[0]);
+    assert.deepEqual(result.data.nodes[2],before.nodes[2]);
+    assert.deepEqual(result.data.edges,before.edges);
+    assert.deepEqual(result.data.extension,before.extension);
+    assert.deepEqual(board,before,"Affiliation changes must not mutate the input snapshot");
+    board=result.data;
+  }
+});
+test("card payloads reject non-text affiliation while accepting empty text and older payloads",()=>{
+  const { affiliation: _unused, ...legacy } = sample;
+  for (const affiliation of [null,42,[],{ name: "University A" },true]) {
+    const payload={ version: 1, sourceId: SOURCE, paper: { ...legacy, affiliation } };
+    assert.equal(decodeCard('```notion-paper\n'+JSON.stringify(payload)+'\n```'),null);
+  }
+  for (const paper of [legacy,{ ...legacy, affiliation: "" },{ ...legacy, affiliation: "University A" }]) {
+    const payload={ version: 1 as const, sourceId: SOURCE, paper };
+    assert.deepEqual(decodeCard(encodeCard(payload)),payload);
+  }
+});
 test("repeated sync is idempotent, and duplicates of the same paper keep their own IDs and positions", () => {
   const board = initial(); board.nodes.push({ ...board.nodes[1], id: "copy", x: 1500 });
   const result = mergePapers(board, SOURCE, [sample]);

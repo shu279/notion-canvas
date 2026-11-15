@@ -26,6 +26,7 @@ export function renderCard(container: HTMLElement, payload: CardPayload, options
     badge.textContent = tag.name; meta.append(badge);
   }
   if (paper.venue) { const venue = doc.createElement("span"); venue.className = "npc-venue"; venue.textContent = paper.venue; meta.append(venue); }
+  if (paper.affiliation) { const affiliation = doc.createElement("span"); affiliation.className = "npc-affiliation"; affiliation.textContent = paper.affiliation; meta.append(affiliation); }
   if (meta.childNodes.length) card.append(meta);
   if (paper.about) { const about = doc.createElement("p"); about.className = "npc-about"; about.textContent = paper.about; card.append(about); }
   if (options.showStatus && paper.status) {

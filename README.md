@@ -27,9 +27,12 @@ Desktop Obsidian **1.11.4+** is required. The built plugin is included.
 | About | Text or a formula returning text, used as the summary |
 | Tags | Multi-select |
 | Venue | Text, select, multi-select, or a formula returning text; use it for any extra detail |
+| Affiliation | Optional text, select, multi-select, or a formula returning text; shown after Venue |
 | Status | Status or select |
 
 The defaults are `Paper`, `About`, `Tags`, `Venue`, and `Status`. **Rename these mappings to match your database, and leave unused optional fields blank.** Other property types are not displayed.
+
+To show an organization or affiliation, set the **Affiliation** mapping to your column name (for example, `Affiliation`) and refresh. It is blank by default so databases without this column keep working.
 
 Each Canvas uses one data source. Choose a different Canvas path when switching databases. Entries with a `Screening` status show a 📌 icon.
 

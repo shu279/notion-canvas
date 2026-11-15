@@ -7,7 +7,7 @@ import { sample, SOURCE, DB, schema, page } from "./fixtures.ts";
 import { DEFAULT_FIELDS, decodeCard, encodeCard } from "../src/model.ts";
 const bundle = buildSync({ entryPoints: ["src/main.ts"], bundle:true,write:false,minify:true,platform:"browser",target:"es2022",format:"cjs",external:["obsidian","electron"] }).outputFiles[0].text;
 const sampleUrl = `https://app.notion.com/p/Diffusion-Models-Beat-GANs-on-Image-Synthesis-${sample.id.replace(/-/g,'')}`;
-function fixture() {
+function fixture(affiliation?: string) {
  const dom=new JSDOM('<body></body>');
  const notices:string[]=[],commands=new Map<string,any>(),renderers=new Map<string,any>(),requests:any[]=[],files=new Map<string,{file:any,content:string}>();
  const opened:string[]=[],secrets:string[]=[]; let fail=false,live:any[]=[];
@@ -21,14 +21,17 @@ function fixture() {
  };
  class Plugin {
   app=app; settingsData:any=null;
-  async loadData(){return{secretName:"notion-test",source:DB,sourceKind:"database",canvasPath:"Papers.canvas",fields:DEFAULT_FIELDS};}
+  async loadData(){return{secretName:"notion-test",source:DB,sourceKind:"database",canvasPath:"Papers.canvas",fields:{...DEFAULT_FIELDS,...(affiliation?{affiliation:'Affiliation'}:{})}};}
   async saveData(d:any){this.settingsData=d;}
   addSettingTab(){} addCommand(c:any){commands.set(c.id,c);} addRibbonIcon(){return dom.window.document.createElement('button');}
   registerMarkdownCodeBlockProcessor(name:string,cb:any){renderers.set(name,cb);} registerEvent(){}
  }
  const obsidian={Plugin,PluginSettingTab:class{},Notice,TFile,normalizePath:(s:string)=>s,setIcon:()=>{},
   requestUrl:async(req:any)=>{requests.push(req);if(fail)return{status:403,headers:{},text:'{"message":"fixture-secret"}'};
-   const body=req.url.endsWith('/query')?{results:[{...page(),url:sampleUrl}],has_more:false}:req.url.includes('/databases/')?{data_sources:[{id:SOURCE}]}:schema;
+   const row={...page(),url:sampleUrl};
+   const sourceSchema={properties:{...schema.properties}};
+   if(affiliation){(row.properties as any).Affiliation={type:'rich_text',rich_text:[{plain_text:affiliation}]};sourceSchema.properties.Affiliation={type:'rich_text'};}
+   const body=req.url.endsWith('/query')?{results:[row],has_more:false}:req.url.includes('/databases/')?{data_sources:[{id:SOURCE}]}:sourceSchema;
    return{status:200,headers:{},text:JSON.stringify(body)};}};
  const module={exports:{} as any};const external:string[]=[];
  new Script(bundle).runInNewContext({module,exports:module.exports,require:(name:string)=>name==='obsidian'?obsidian:{shell:{openExternal:async(url:string)=>{external.push(url);}}},AbortController,URL,Map,Set,console,setTimeout,clearTimeout});
@@ -53,6 +56,20 @@ test("production plugin creates a native Canvas through its registered refresh c
  assert.equal(f.external[1],sampleUrl);
  await f.plugin.saveSettings();assert.equal(JSON.stringify(f.plugin.settingsData).includes('fixture-secret'),false);
  assert.ok(f.requests.every(r=>r.method==='GET'||r.url.endsWith('/query')));
+ }finally{f.plugin.onunload();f.dom.window.close();}
+});
+test("an Affiliation mapping flows from Notion to saved cards and appears between Venue and About",async()=>{
+ const f=fixture('Example Institute');try{
+  await f.plugin.onload();await f.plugin.refresh();
+  const card=JSON.parse(f.files.get('Papers.canvas')!.content).nodes.find((n:any)=>n.type==='text');
+  assert.equal(decodeCard(card.text)!.paper.affiliation,'Example Institute');
+  const el=f.dom.window.document.createElement('div');
+  f.renderers.get('notion-paper')(card.text.split('\n')[1],el);
+  const affiliation=el.querySelector('.npc-affiliation')!;
+  assert.equal(affiliation.textContent,'Example Institute');
+  assert.equal(affiliation.previousElementSibling?.className,'npc-venue');
+  assert.equal(affiliation.parentElement?.nextElementSibling?.className,'npc-about');
+  await f.plugin.saveSettings();assert.equal(f.plugin.settingsData.fields.affiliation,'Affiliation');
  }finally{f.plugin.onunload();f.dom.window.close();}
 });
 test("production plugin leaves a saved layout byte-for-byte unchanged after an API failure",async()=>{

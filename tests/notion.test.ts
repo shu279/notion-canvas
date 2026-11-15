@@ -48,8 +48,62 @@ test("multiple data sources require an explicit choice and wrong property types 
 test("optional fields can be omitted and title can be auto-detected", async () => {
   let i=0;
   const c=client(async()=>++i===1 ? response({properties:{Name:{type:"title"}}}) : response({results:[{object:"page",id:ID,properties:{Name:{type:"title",title:[{plain_text:"Example"}]}}}],has_more:false}));
-  const result=await c.readAll(SOURCE,"data-source",{title:"",about:"",tags:"",venue:"",status:""});
+  const result=await c.readAll(SOURCE,"data-source",{title:"",about:"",tags:"",venue:"",affiliation:"",status:""});
   assert.equal(result.papers[0].title,"Example"); assert.deepEqual(result.papers[0].tags,[]);
+});
+test("configured Affiliation reads text fragments and supported Notion text-valued properties",async()=>{
+  const cases = [
+    { property: { type: "rich_text", rich_text: [{ plain_text: "University A" }, { text: { content: " · Lab B" } }] }, expected: "University A · Lab B" },
+    { property: { type: "select", select: { name: "University A", color: "blue" } }, expected: "University A" },
+    { property: { type: "multi_select", multi_select: [{ name: "University A" }, { name: "Lab B" }] }, expected: "University A, Lab B" },
+    { property: { type: "formula", formula: { type: "string", string: "University A" } }, expected: "University A" },
+    { property: { type: "rich_text", rich_text: [] }, expected: "" }
+  ];
+  for (const { property, expected } of cases) {
+    let requests = 0;
+    const base = page();
+    const c = client(async()=>++requests === 1
+      ? response({ properties: { ...schema.properties, Affiliation: { type: property.type } } })
+      : response({ results: [{ ...base, properties: { ...base.properties, Affiliation: property } }], has_more: false }));
+    const result = await c.readAll(SOURCE,"data-source",{ ...DEFAULT_FIELDS, affiliation: "Affiliation" });
+    assert.equal(result.papers[0].affiliation,expected);
+    assert.equal(requests,2);
+  }
+});
+test("blank Affiliation mapping keeps old databases compatible and omits stale affiliation data",async()=>{
+  assert.equal(DEFAULT_FIELDS.affiliation,"");
+  for (const includeUnmappedProperty of [false,true]) {
+    const base = page();
+    const row = includeUnmappedProperty
+      ? { ...base, properties: { ...base.properties, Affiliation: { type: "rich_text", rich_text: [{ plain_text: "Do not import" }] } } }
+      : base;
+    let calls=0;
+    const result=await client(async()=>++calls===1?response(schema):response({ results: [row], has_more: false })).readAll(SOURCE,"data-source");
+    assert.equal(Object.hasOwn(result.papers[0],"affiliation"),false);
+    assert.equal(result.papers[0].title,sample.title);
+  }
+});
+test("missing or unsupported configured Affiliation rejects the read before any papers can be committed",async()=>{
+  const mapping={ ...DEFAULT_FIELDS, affiliation: "Affiliation" };
+  for (const property of [undefined,{ type: "number" },{ type: "relation" }]) {
+    const calls: Parameters<Transport>[0][]=[];
+    let committed=false;
+    const c=client(async request=>{
+      calls.push(request);
+      return response({ properties: { ...schema.properties, ...(property ? { Affiliation: property } : {}) } });
+    });
+    await assert.rejects(c.readAll(SOURCE,"data-source",mapping).then(()=>{committed=true;}),/affiliation property mapping/);
+    assert.equal(committed,false);
+    assert.equal(calls.length,1,"A schema failure must stop before querying pages");
+    assert.equal(calls[0].method,"GET");
+  }
+  // A valid schema is not enough if a page response omits the configured field.
+  let calls=0,committed=false;
+  const c=client(async()=>++calls===1
+    ? response({ properties: { ...schema.properties, Affiliation: { type: "rich_text" } } })
+    : response({ results: [page()], has_more: false }));
+  await assert.rejects(c.readAll(SOURCE,"data-source",mapping).then(()=>{committed=true;}),/missing a mapped property/);
+  assert.equal(committed,false);
 });
 test("Notion URLs ignore view IDs and external desktop URLs are constructed from validated IDs",()=>{
   assert.equal(notionId(`https://www.notion.so/Papers-${DB.replace(/-/g,"")}?v=${ID}`),DB);
